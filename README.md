@@ -17,7 +17,7 @@ models:
       +schema: CS_STG
     DIMENSION:
       +schema: CS_DIM
-    DIMENSION:
+    FACT:
       +schema: CS_FACT
 ```
 
@@ -29,11 +29,24 @@ I have built a macro called `add_column_names.sql` to columnarly maps the eight 
 
 ## Step 3
 
-I have combined all the region data into one file called `STG_ALL_GEO.sql` int he STAGING folder. From there I have normalized the dataset into the three necessary views.
+I have combined all the region data into one file called `STG_ALL_GEO.sql` int he STAGING folder. From there I have normalized the dataset into the 6 necessary views. 
 
 1. DIM_ATTRIBUTES.sql
 2. DIM_BEHAVIOR.sql
 3. DIM_COUNTRY.sql
+4. DIM_AGENT.sql
+5. DIM_CITY.sql
+6. DIM_WITNESS.sql
+
+Here is the ERD diagram.
+
+![ERD diagram](https://user-images.githubusercontent.com/44732615/177209755-5e73b303-78fc-4e2a-9faf-28427e670a22.png)
+
+
+Overall the dbt model looks like the below image.
+
+![Screenshot from 2022-07-05 01-09-47](https://user-images.githubusercontent.com/44732615/177209918-45970a22-2f54-406d-82b0-273e9f874546.png)
+
 
 ## Analytics
 
@@ -44,43 +57,58 @@ The analytical views are created in the FACT folder. usually the last bit of cal
 ```sql
     WITH BASE AS (
     SELECT *, ROW_NUMBER() over (PARTITION BY WITNESS_MONTH ORDER BY NUM_OF_SIGHTINGS DESC) AS RANK
-    FROM {{ref('FACT_GEOGRAPHY')}}
+    FROM DEV_PRE_AGGREGATION_CS_FACT.FACT_GEOGRAPHY
     )
     SELECT *
     FROM BASE WHERE RANK = 1;
 ```
 
-2. For each month, what is the probability that Ms. Sandiego is armed AND wearing a jacket, but NOT a hat? What general observations about Ms. Sandiego can you make from this?
+Result
+
+![Screenshot from 2022-07-04 22-36-52](https://user-images.githubusercontent.com/44732615/177198001-ba5a8e7d-73fe-4e1a-a5f9-fbb8bdad2431.png)
+
+
+2. For each month, what is the probability that Ms. Sandiego is armed AND wearing a jacket,
+but NOT a hat? What general observations about Ms. Sandiego can you make from this?
 
 ```sql
 with base as (
     select date_trunc('MONTH', date_witness) as witness_month, date_witness, attribute_match 
-    from {{ref('FACT_ATTRIBUTE_MATCH')}} 
+    from DEV_PRE_AGGREGATION_CS_FACT.FACT_ATTRIBUTE_MATCH 
     )
     select witness_month, sum(case when attribute_match = 'MATCH' THEN 1 else 0 end)/count(*) as probability_of_match from base group by 1 order by 1;
 ```
+
+Result
+
+![Screenshot from 2022-07-04 22-54-27](https://user-images.githubusercontent.com/44732615/177198106-72fa0da2-c53c-4b7c-8935-05c93427a3ba.png)
 
 3. What are the three most occuring behaviors of Ms. Sandiego?
 
 ```sql
     select BEHAVIOR, COUNT(*)
-    from {{ref('FACT_BEHAVIOR')}}
+    from DEV_PRE_AGGREGATION_CS_FACT.FACT_BEHAVIOR
     GROUP BY 1
     ORDER BY 2 DESC LIMIT 3;
 ```
 
+Result
+
+![Screenshot from 2022-07-04 22-56-42](https://user-images.githubusercontent.com/44732615/177198327-e1125350-22a4-4593-bf84-400046666a28.png)
+
+
 4. For each month, what is the probability Ms. Sandiego exhibits one of her three most occurring behaviors?
 
 ```sql
-    with behavior as (
+     with behavior as (
     select BEHAVIOR
-    from DATAFLO_ETLDB_DEV.DEV_PRE_AGGREGATION.FACT_BEHAVIOR
+    from DEV_PRE_AGGREGATION_CS_FACT.FACT_BEHAVIOR
     GROUP BY 1
         order by count(*) desc limit 3
     ),
     witness_behavior as (
     select *
-        from DATAFLO_ETLDB_DEV.DEV_PRE_AGGREGATION.FACT_BEHAVIOR
+        from DEV_PRE_AGGREGATION_CS_FACT.FACT_BEHAVIOR
     )
     select date_trunc('MONTH', date_witness) as witness_month,
     sum(case when b.behavior is not null then 1 else 0 end)/count(wb.behavior) as prob
@@ -88,3 +116,7 @@ with base as (
     left join behavior b on wb.behavior = b.behavior
     group by 1 order by 1;
 ```
+
+Result
+
+![Screenshot from 2022-07-04 22-57-35](https://user-images.githubusercontent.com/44732615/177198391-5b5f4eef-f3ce-4606-978d-b4184e62552f.png)

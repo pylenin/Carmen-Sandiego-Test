@@ -37,6 +37,6 @@ models:
       +schema: CS_STG
     DIMENSION:
       +schema: CS_DIM
-    DIMENSION:
+    FACT:
       +schema: CS_FACT
     
